@@ -1,6 +1,8 @@
 # S2S-Temp
 
-This repository contains the data and code for [Low-Resource Response Generation with Template Prior (EMNLP2019)](https://arxiv.org/abs/1909.11968).
+This repository contains the data and code for [Low-Resource Response Generation with Template Prior (EMNLP2019)](https://arxiv.org/abs/1909.11968). The overall architecture is shown in Figure 1.
+
+![](S2S_Temp.png)
 
 
 ## Environments
@@ -12,9 +14,9 @@ The code has been tested with:
 
 ## Data and Preparation
 
-**Question Response Generation Task**   The preprocessed data is in [question_data](http:). [question_data/dia_data](http:) contains the pair data where the raw data is downloaded from [here](http://coai.cs.tsinghua.edu.cn/file/QGdata.zip). The large scale unpaired question data is under [question_data/zhihu_data](http:).
+**Question Response Generation Task**   The preprocessed data is in [question_data](https://github.com/TobeyYang/S2S_Temp/tree/master/question_data). [question_data/dia_data](https://github.com/TobeyYang/S2S_Temp/tree/master/question_data/dia_data) contains the pair data where the raw data is downloaded from [here](http://coai.cs.tsinghua.edu.cn/file/QGdata.zip). The large scale unpaired question data is under [question_data/zhihu_data](https://github.com/TobeyYang/S2S_Temp/tree/master/question_data/zhihu_data).
 
-**Sentiment Response Generation Task**   The preprocessed data is in [sentiment_data](http:). The paired data is in [sentiment_data/tweet_dia](http:) and the unpaired data is in [sentiment_data/tweet_data](http:).
+**Sentiment Response Generation Task**   The preprocessed data is in [sentiment_data](https://github.com/TobeyYang/S2S_Temp/tree/master/sentiment_data). The paired data is in [sentiment_data/tweet_dia](https://github.com/TobeyYang/S2S_Temp/tree/master/sentiment_data/tweet_dia) and the unpaired data is in [sentiment_data/tweet_data](https://github.com/TobeyYang/S2S_Temp/tree/master/sentiment_data/tweet_dia).
 
 The code assumes that each dataset lives in a directory containing `src_train.txt`, `train.txt`, `src_valid.txt`, and `valid.txt` files. For unpaired data, the `src_train.txt` is patched with `<post>` for each sample. Not that to improve the template learning, we annotate several spans of VP and NP elements for each sentence in `train.txt` and `valid.txt` by Stanford Parser and force the NHSMM not to break them during training with `-seg_cut`, and you can ignore this constraint with `-no_constr`.
 
@@ -22,7 +24,7 @@ The code assumes that each dataset lives in a directory containing `src_train.tx
 The commands for Question Response Generation task are given below. You can implement the Sentiment Response Generation task in a similar way.
 
 ### Learn Template Prior and Build Template Pool
-First, you can train the template prior (NHSMM) with data in [question_data/zhihu_data](http:) as follows:
+Firstly, you can obtain the template prior (NHSMM) with data in [question_data/zhihu_data](https://github.com/TobeyYang/S2S_Temp/tree/master/question_data/zhihu_data) as follows:
 
 ```bash
 mkdir models
@@ -41,7 +43,7 @@ python chsmm_without_src.py -label_data -split train -data question_data/zhihu_d
 The above script writes the segmentations to standard output and redirects them to file `segs/hsmm-300-50-4.pt.e10.segs.pool` .
 
 #### Examining and Extracting Templates
-The [template_extraction.py](https:) script can be used to extract templates from the segmentations produced as above, and to look at them. In particular, `extract_from_tagged_data()` returns the most common templates, and mappings from these templates to sentences, and from states to phrases. This script is also used in the following response generation.
+The `template_extraction.py` script can be used to extract templates from the segmentations produced as above, and to look at them. In particular, `extract_from_tagged_data()` returns the most common templates, and mappings from these templates to sentences, and from states to phrases. This script is also used in the following response generation.
 
 
 ### Adversarial Training
@@ -87,3 +89,7 @@ If you find the datasets or code useful in your research, please consider citing
     pages = "1886--1897",
 }
 ```
+
+## References
+* [Learning Neural Templates for Text Generation (EMNLP 2018)](https://arxiv.org/abs/1808.10122) [\[code\]](https://github.com/harvardnlp/neural-template-gen)
+* A PyTorch implementation of [SeqGAN: Sequence Generative Adversarial Nets with Policy Gradient (AAAI 2017)](https://arxiv.org/abs/1609.05473) [\[code\]](https://github.com/suragnair/seqGAN)

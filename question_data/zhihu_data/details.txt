@@ -1,0 +1,10 @@
+        0 details.txt
+   721620 raw_train.txt
+     8946 raw_valid.txt
+   717240 src_train.txt
+     8900 src_valid.txt
+   717240 train_read.txt
+   717240 train.txt
+     8900 valid_read.txt
+     8900 valid.txt
+  2908986 total

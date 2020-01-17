@@ -54,7 +54,7 @@ python chsmm_without_src.py -label_data -split valid -data question_data/dia_dat
 ```
 To improve the training stability, we first pre-train the generator with MLE, then update the generator and discriminator alternatively:
 ```bash
-python gan.py  -data question_data/dia_data -load models/hsmm-300-50-4.pt.e10 -pretrain_gen -pretrained_gen_path models/pretrain_gen.pt -bsz 100 --gpu 0 -pretrain_train_fi segs/hsmm-300-50-4.pt.e10.segs.train -pretrain_valid_fi segs/hsmm-300-50-4.pt.e10.segs.valid -beam_sample -tagged_fi segs/hsmm-300-50-4.pt.e10.segs.pool -gan_path models/generator_adversarial.pt
+python gan.py  -data question_data/dia_data -load models/hsmm-300-50-4.pt.e10 -pretrain_gen -pretrained_gen_path models/pretrain_gen.pt -bsz 100 --gpu 0 -pretrain_train_fi segs/hsmm-300-50-4.pt.e10.segs.train -pretrain_valid_fi segs/hsmm-300-50-4.pt.e10.segs.valid -beam_sample -tagged_fi segs/hsmm-300-50-4.pt.e10.segs.pool -gan_path models/gan
 ```
 
 ## Generate

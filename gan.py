@@ -1,6 +1,7 @@
 from __future__ import print_function
 import os
 
+import sys
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -13,6 +14,7 @@ from tqdm import tqdm
 from utils import batchwise_sample
 import random
 import numpy as np
+
 # from generate import metric_validate
 
 parser = argparse.ArgumentParser('gan args')
@@ -21,15 +23,15 @@ parser.add_argument('-bsz', type=int, default=32, help='batch size')
 parser.add_argument('-emb_size', type=int, default=300, help='size of word embeddings')
 parser.add_argument('-hid_size', type=int, default=300, help='size of rnn hidden state')
 parser.add_argument('-dropout', type=float, default=0)
-parser.add_argument('-load', type=str, default='models/hsmm_e5/50-1-L4-unif-segcut-new.pt.e5',
-                    help='the load hsmm model')
+parser.add_argument('-load', type=str, help='the path to load hsmm model')
 
-parser.add_argument('-pretrain_gen', action='store_true', help='pretrain generator by MLE')
+parser.add_argument('-pretrain_gen', action='store_true', help='pre-train generator by MLE')
 parser.add_argument('-pretrain_gen_epochs', type=int, default=20)
-parser.add_argument('-pretrain_train_fi', type=str, default='', help='the segmented training data.')
-parser.add_argument('-pretrain_valid_fi', type=str, default='', help='the segmented validation data.')
-parser.add_argument('-pretrained_gen_path', type=str, default='models/hsmm_e5/pretrain_gen.pt.e8.e20', help='the save path of pretrained generator.')
-parser.add_argument('-load_gen', action='store_true', help='load the pretrained generator.')
+parser.add_argument('-pretrain_train_fi', type=str, help='the segmented training data.')
+parser.add_argument('-pretrain_valid_fi', type=str, help='the segmented validation data.')
+parser.add_argument('-pretrained_gen_path', type=str, default='models/pretrain_gen.pt',
+                    help='the save path of pretrained generator.')
+parser.add_argument('-load_gen', action='store_true', help='load the pre-trained generator.')
 parser.add_argument('-N', type=int, default=5, help='the roll out numbers.')
 parser.add_argument('-beam_sample', action='store_true', help='whether use beam search sample strategy')
 parser.add_argument('-beam_size', type=int, default=5, help='the beam search size.')
@@ -38,22 +40,23 @@ parser.add_argument('-no_teacher', action='store_true', help='no teacher forcing
 parser.add_argument('-test_src', type=str, default='', help='the test query file.')
 parser.add_argument('-test_rep', type=str, default='', help='the test response file')
 
-parser.add_argument('-pretrain_dis', action='store_true', help='pretrain discriminator by neg sample')
+parser.add_argument('-pretrain_dis', action='store_true', help='pre-train discriminator by neg sample')
 parser.add_argument('-pretrain_dis_epochs', type=int, default=20)
-parser.add_argument('-pretrained_dis_path', type=str, default='models/dis/pretrain_dis.pt')
-parser.add_argument('-load_dis', action='store_true', help='load the pretrained discriminator.')
+parser.add_argument('-pretrained_dis_path', type=str, default='models/pretrain_dis.pt')
+parser.add_argument('-load_dis', action='store_true', help='load the pre-trained discriminator.')
 parser.add_argument('-pos_neg_samples', type=int, default=20000, help='the positive and negative samples number')
 parser.add_argument('--filter_num', type=int, default=128)
 parser.add_argument('--filter_sizes', type=str, default='1,2,3')
 parser.add_argument('-d_steps', type=int, default=1)
 parser.add_argument('-dis_epochs', type=int, default=2)
 
-parser.add_argument('-tagged_fi', type=str, default='question_data/dia_parse/50-1-L4-unif-segcut-new.pt.e5.segs.valid')
+parser.add_argument('-tagged_fi', type=str, help='the template pool file.')
 parser.add_argument('-ntemplates', type=int, default=100)
 
 parser.add_argument('-adv_train_epochs', type=int, default=20, help='the adversarial training epochs.')
 parser.add_argument('-adv_gen_batch_num', type=int, default=50)  # todo: increase the number
-parser.add_argument('-gan_path', type=str, default='models/gan', hep='the generator save path during adversarial learning.')
+parser.add_argument('-gan_path', type=str, default='models/gan',
+                    help='the directory to save generator and discriminator during adversarial learning.')
 
 # parser.add_argument('-lang', required=True)
 
@@ -80,6 +83,7 @@ def validation(gen):
             total_loss.append(loss)
     # print(gen.decoder.weight.data[0][:20])
     return sum(total_loss) / len(total_loss)
+
 
 def train_generator_MLE(gen, gen_opt, epochs):
     '''
@@ -152,8 +156,6 @@ def train_generator_PG(gen, gen_opt, dis, batches_num, templates):
     perm = list(range(len(corpus.train)))
     random.shuffle(perm)
     samples_ids = perm[:batches_num]
-    # for bid in tqdm(samples_ids):
-    ratio = []
     for bid in samples_ids:
         query, rep, template = corpus.train[bid]
         query, rep, template = query.cuda(), rep.cuda(), template.cuda()
@@ -167,7 +169,6 @@ def train_generator_PG(gen, gen_opt, dis, batches_num, templates):
             sample_rep = gen.sample_one(query, None, tpls)  # the sampled response
 
         out = dis.batchClassify(query, sample_rep)
-        ratio.append(torch.sum(out > 0.5).data.item() / bsz)
         # roll out
         rewards = torch.zeros(bsz, tpl_len).cuda()
         for i in range(tpl_len):
@@ -187,11 +188,6 @@ def train_generator_PG(gen, gen_opt, dis, batches_num, templates):
             gen_opt.zero_grad()
             loss.backward()
             gen_opt.step()
-
-    print(f'ratio: {np.mean(ratio)}')
-    # monitor samples of valid set.
-    # print(f'validation rewards: { validation_sample(gen, dis, templates):.4f}')
-    # print(f'validation loss: { validation(gen):.4f}')
 
 
 def train_discriminator(dis, dis_opt, gen, d_steps, epochs, templates, pos_neg_samples):
@@ -222,7 +218,8 @@ def train_discriminator(dis, dis_opt, gen, d_steps, epochs, templates, pos_neg_s
             val_acc = dis.validate(valid_data)
             tqdm.write(f'd{d_step+1}_e{e+1}  avg loss: {avg_loss:.4f}  val acc: {val_acc:.4f}')
             if val_acc > best_val_acc:
-                dis.save_model(args.pretrained_dis_path + f'.{d_step}.{e}')
+                spath = os.path.join(args.gan_path, 'dis')
+                dis.save_model(spath + f'.s{d_step}.e{e}')
                 best_val_acc = val_acc
 
 
@@ -263,6 +260,8 @@ if __name__ == '__main__':
     torch.manual_seed(666)
     torch.cuda.manual_seed(666)
 
+    os.makedirs(args.gan_path, exist_ok=True)
+
     saved_stuff = torch.load(args.load)
     vocab = saved_stuff["dict"]
     corpus = datasets.TemplateCorpus(args.pretrain_train_fi, args.pretrain_valid_fi, args.bsz, vocab)
@@ -288,7 +287,7 @@ if __name__ == '__main__':
         print('Starting Generator MLE Training...')
         train_generator_MLE(gen, gen_opt, args.pretrain_gen_epochs)
 
-    # pretrain descriminator
+    # pre-train discriminator
     dis_opt = optim.Adam(dis.parameters(), lr=1e-3)
     if args.load_dis:
         path = args.pretrained_dis_path + '.match'
@@ -297,19 +296,20 @@ if __name__ == '__main__':
     if args.pretrain_dis:
         print('Pretrain Discriminator by negative sampling')
         train_discriminator_matching(dis, dis_opt, args.pretrain_dis_epochs)
-    train_discriminator(dis, dis_opt, gen, args.d_steps, args.dis_epochs, templates, args.pos_neg_samples)
 
+    train_discriminator(dis, dis_opt, gen, args.d_steps, args.dis_epochs, templates, args.pos_neg_samples)
     # Adversarial Training
     print('Starting Adversarial Training...')
     print(f'Init validation loss: {validation(gen):.4f}')
 
+
     for epoch in range(1, args.adv_train_epochs + 1):
         print('\n--------\nEPOCH %d\n--------' % (epoch))
         # TRAIN GENERATOR
-        print('\nAdversarial Training Generator : ', end='')
+        print('\nAdversarial Training Generator : ')
         train_generator_PG(gen, gen_opt, dis, args.adv_gen_batch_num, templates)
         kwargs = {'epoch': epoch, 'opt': args}
-        path = args.gan_path + f'.e{epoch}'
+        path = os.path.join(args.gan_path, f'gen.e{epoch}')
         gen.save_model(path, **kwargs)
         print(f'save model to {path}')
 
